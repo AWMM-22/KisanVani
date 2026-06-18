@@ -1,0 +1,61 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  --color-primary-green: #2D6A4F;
+  --color-primary-dark: #1B4332;
+  --color-accent-amber: #F4A261;
+  --color-parchment: #F8F5F0;
+  --color-dark-card: #1A2E1A;
+}
+
+/* Custom styles and simulated phone layouts */
+@layer utilities {
+  .phone-screen {
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4);
+    background-color: #F8F5F0;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Custom animations for sound wave ripples */
+@keyframes wave-bounce {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
+
+.wave-bar {
+  animation: wave-bounce 1.2s ease-in-out infinite;
+}
+
+/* Stagger animations */
+.anim-delay-100 { animation-delay: 100ms; }
+.anim-delay-200 { animation-delay: 200ms; }
+.anim-delay-300 { animation-delay: 300ms; }
+.anim-delay-400 { animation-delay: 400ms; }
+.anim-delay-500 { animation-delay: 500ms; }
+
+/* Custom marquee */
+@keyframes marquee {
+  0% { transform: translateX(100%); }
+  100% { transform: translateX(-100%); }
+}
+
+.marquee-text {
+  display: inline-block;
+  animation: marquee 20s linear infinite;
+}
+
+.marquee-text:hover {
+  animation-play-state: paused;
+}

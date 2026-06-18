@@ -1,0 +1,6 @@
+{
+  "name": "KisanVaani",
+  "description": "Interactive Voice-Based Natural Farming and Organic Agriculture Consultant for Indian Farmers",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
