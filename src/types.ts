@@ -44,12 +44,19 @@ export interface DiseaseRemedy {
 }
 
 export interface DiseaseResult {
+  plantName?: string;
   disease: string;
-  pestsDetected?: string;
+  diseaseNameEn?: string;
   confidence: string;
   crop: string;
-  analysisText: string;
+  detailedAnalysis?: string;
+  analysisText?: string;
+  affectedParts?: string;
+  severity?: "low" | "medium" | "high";
   remedies: DiseaseRemedy[];
+  precautions?: string[];
+  preventionTips?: string;
+  model?: string;
   belowLimit?: boolean;
 }
 

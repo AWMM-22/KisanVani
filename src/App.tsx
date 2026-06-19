@@ -51,6 +51,15 @@ export default function App() {
   const [expandedCropId, setExpandedCropId] = useState<string | null>(null);
   const [trendAnalysisCrop, setTrendAnalysisCrop] = useState<CropPrice | null>(null);
 
+  // Farmer Listings state
+  const [farmerListings, setFarmerListings] = useState<any[]>([]);
+  const [showSellForm, setShowSellForm] = useState<boolean>(false);
+  const [sellForm, setSellForm] = useState({
+    farmerName: "", phone: "", cropName: "", quantity: "", pricePerQuintal: "", description: ""
+  });
+  const [sellFormMsg, setSellFormMsg] = useState<string>("");
+  const [marketSubTab, setMarketSubTab] = useState<"prices" | "sell">("prices");
+
   // Weather Screen state
   const [weatherHourlyIndex, setWeatherHourlyIndex] = useState<number>(0);
 
@@ -123,6 +132,7 @@ export default function App() {
     fetchWeatherData();
     fetchMarketPrices();
     fetchSubsidies();
+    fetchFarmerListings();
   }, [district]);
 
   // Handle calculator dynamics
@@ -177,6 +187,53 @@ export default function App() {
       }
     } catch (e) {
       console.error("Error loading subsidies:", e);
+    }
+  };
+
+  const fetchFarmerListings = async () => {
+    try {
+      const response = await fetch(`/api/market/listings?district=${district}`);
+      if (response.ok) {
+        const data = await response.json();
+        setFarmerListings(data.listings || []);
+      }
+    } catch (e) {
+      console.error("Error loading listings:", e);
+    }
+  };
+
+  const handleCreateListing = async () => {
+    if (!sellForm.farmerName || !sellForm.cropName || !sellForm.quantity || !sellForm.pricePerQuintal) {
+      setSellFormMsg("कृपया सभी आवश्यक फील्ड भरें।");
+      return;
+    }
+    try {
+      const response = await fetch("/api/market/listings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...sellForm,
+          location: district,
+          pricePerQuintal: parseInt(sellForm.pricePerQuintal)
+        })
+      });
+      if (response.ok) {
+        setSellFormMsg("आपकी लिस्टिंग सफलतापूर्वक बनाई गई!");
+        setSellForm({ farmerName: "", phone: "", cropName: "", quantity: "", pricePerQuintal: "", description: "" });
+        fetchFarmerListings();
+        setTimeout(() => setSellFormMsg(""), 3000);
+      }
+    } catch (e) {
+      setSellFormMsg("लिस्टिंग बनाने में त्रुटि। पुनः प्रयास करें।");
+    }
+  };
+
+  const handleDeleteListing = async (id: string) => {
+    try {
+      await fetch(`/api/market/listings/${id}`, { method: "DELETE" });
+      fetchFarmerListings();
+    } catch (e) {
+      console.error("Error deleting listing:", e);
     }
   };
 
@@ -507,7 +564,7 @@ export default function App() {
                   <RefreshCw className="w-5 h-5 text-emerald-400 animate-spin" />
                   <div className="flex-1">
                     <p className="text-xs font-bold text-emerald-300">AI विश्लेषण हो रहा है...</p>
-                    <p className="text-[10px] text-slate-400 font-mono">HuggingFace EfficientNet + Gemini Pathology model</p>
+                    <p className="text-[10px] text-slate-400 font-mono">Gemini Vision AI — छवि विश्लेषण जारी है</p>
                   </div>
                 </div>
               )}
@@ -526,27 +583,54 @@ export default function App() {
               {/* AI Diagnostic Result Card output details */}
               {diseaseResult && (
                 <div id="pathology-result-card" className="bg-white rounded-3xl border-l-[8px] border-emerald-600 p-5 shadow-md mt-2">
+                  {/* Plant & Disease Header */}
                   <div className="flex justify-between items-start mb-3">
                     <div>
-                      <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
-                        {diseaseResult.crop || "टमाटर"}
-                      </span>
+                      {diseaseResult.plantName && (
+                        <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
+                          🌱 {diseaseResult.plantName}
+                        </span>
+                      )}
                       <h4 className="text-lg font-extrabold text-slate-900 mt-1 font-sans">
                         {diseaseResult.disease}
                       </h4>
+                      {diseaseResult.diseaseNameEn && (
+                        <p className="text-[10px] text-slate-400 font-mono mt-0.5">{diseaseResult.diseaseNameEn}</p>
+                      )}
                     </div>
-                    <span className="bg-green-100 text-green-900 font-bold text-[11px] px-2.5 py-1 rounded-xl">
-                      {diseaseResult.confidence || "87% सटीकता"}
-                    </span>
+                    <div className="flex flex-col items-end gap-1">
+                      <span className="bg-green-100 text-green-900 font-bold text-[11px] px-2.5 py-1 rounded-xl">
+                        {diseaseResult.confidence || "85%"}
+                      </span>
+                      {diseaseResult.severity && (
+                        <span className={`font-bold text-[10px] px-2 py-0.5 rounded-lg ${
+                          diseaseResult.severity === 'high' ? 'bg-red-100 text-red-800' :
+                          diseaseResult.severity === 'medium' ? 'bg-amber-100 text-amber-800' :
+                          'bg-emerald-100 text-emerald-800'
+                        }`}>
+                          {diseaseResult.severity === 'high' ? '⚠️ गंभीर' :
+                           diseaseResult.severity === 'medium' ? '🟡 मध्यम' : '🟢 हल्का'}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
+                  {/* Affected Parts */}
+                  {diseaseResult.affectedParts && (
+                    <div className="flex items-center gap-1.5 mb-3 text-[10px] text-slate-500 bg-slate-50 px-3 py-1.5 rounded-lg">
+                      <span className="font-bold">प्रभावित भाग:</span> {diseaseResult.affectedParts}
+                    </div>
+                  )}
+
+                  {/* Detailed Analysis */}
                   <p className="text-xs text-slate-600 italic bg-[#F8F5F0] p-3 rounded-xl mb-4 font-sans leading-relaxed">
-                    "{diseaseResult.analysisText}"
+                    "{diseaseResult.detailedAnalysis || diseaseResult.analysisText}"
                   </p>
 
+                  {/* Organic Remedies */}
                   <h5 className="text-xs font-bold text-slate-900 uppercase tracking-widest mb-2 flex items-center gap-1.5">
                     <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                    फसल संजीवनी: 3 प्राकृतिक उपचार
+                    फसल संजीवनी: जैविक उपचार
                   </h5>
 
                   <div className="space-y-2">
@@ -558,9 +642,33 @@ export default function App() {
                     ))}
                   </div>
 
-                  {/* Trust warning prompt if photo is blurry */}
+                  {/* Precautions */}
+                  {diseaseResult.precautions && diseaseResult.precautions.length > 0 && (
+                    <div className="mt-4">
+                      <h5 className="text-xs font-bold text-amber-900 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                        ⚠️ सावधानियाँ (Precautions)
+                      </h5>
+                      <div className="space-y-1.5">
+                        {diseaseResult.precautions.map((precaution, k) => (
+                          <div key={k} className="p-2.5 bg-amber-50 rounded-lg border border-amber-100 text-[11px] text-amber-900 font-sans flex items-start gap-1.5">
+                            <span className="text-amber-600 shrink-0">•</span>
+                            {precaution}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Prevention Tips */}
+                  {diseaseResult.preventionTips && (
+                    <div className="mt-4 p-3 bg-blue-50 text-blue-950 rounded-xl text-[11px] font-medium border border-blue-100">
+                      <span className="font-bold">🛡️ भविष्य में रोकथाम:</span> {diseaseResult.preventionTips}
+                    </div>
+                  )}
+
+                  {/* Trust warning if photo is blurry */}
                   <div className="mt-4 p-3 bg-red-50 text-red-950 rounded-xl text-[10px] font-medium border border-red-100">
-                    ⚠️ 70% से कम सटीकता दिखे? रोग को बेहतर पहचानने के लिए तीखी धूप में दोबारा साफ ऊपर की फोटो भेजें।
+                    ⚠️ बेहतर परिणाम के लिए: तीखी धूप में पत्ती की साफ ऊपरी फोटो भेजें। स्पष्ट फोटो से अधिक सटीक निदान होगा।
                   </div>
                 </div>
               )}
@@ -574,7 +682,7 @@ export default function App() {
               <div className="flex justify-between items-center mb-4 pb-2 border-b border-indigo-50">
                 <div className="flex items-center gap-2">
                   <BarChart2 className="w-5 h-5 text-indigo-700" />
-                  <h2 className="text-xl font-bold font-sans">आज के मंडी भाव (Mandi Prices)</h2>
+                  <h2 className="text-xl font-bold font-sans">मंडी बाज़ार (Mandi Market)</h2>
                 </div>
                 {/* Location select dropdown */}
                 <select 
@@ -586,135 +694,290 @@ export default function App() {
                   <option value="Nagpur">Nagpur (नागपुर)</option>
                   <option value="Pune">Pune (पुणे)</option>
                   <option value="Satara">Satara (सातारा)</option>
+                  <option value="Ahmednagar">Ahmednagar (अहमदनगर)</option>
+                  <option value="Solapur">Solapur (सोलापुर)</option>
                 </select>
               </div>
 
-              {/* Search input field */}
-              <div className="relative mb-4">
-                <Search className="absolute left-3 top-3.5 w-4 h-4 text-slate-400" />
-                <input
-                  type="text"
-                  value={marketSearch}
-                  onChange={(e) => setMarketSearch(e.target.value)}
-                  placeholder="फसल का नाम खोजें (जैसे: प्याज, लहसुन, गेहूं)..."
-                  className="w-full bg-white border border-slate-100 rounded-2xl pl-10 pr-4 py-3 text-xs focus:ring-1 focus:ring-indigo-500 shadow-xs font-sans text-slate-900"
-                />
+              {/* Sub-tabs: Prices | Sell */}
+              <div className="bg-white p-1 rounded-2xl flex border border-indigo-100 mb-4 select-none">
+                <button 
+                  onClick={() => setMarketSubTab("prices")}
+                  className={`flex-1 py-2 text-xs font-bold rounded-xl text-center cursor-pointer ${
+                    marketSubTab === "prices" ? "bg-indigo-700 text-white" : "text-slate-600"
+                  }`}
+                >
+                  📊 मंडी भाव (Prices)
+                </button>
+                <button 
+                  onClick={() => { setMarketSubTab("sell"); fetchFarmerListings(); }}
+                  className={`flex-1 py-2 text-xs font-bold rounded-xl text-center cursor-pointer ${
+                    marketSubTab === "sell" ? "bg-emerald-700 text-white" : "text-slate-600"
+                  }`}
+                >
+                  🛒 बेचें (Sell Produce)
+                </button>
               </div>
 
-              {/* Crop category choice horizontal capsules */}
-              <div className="flex gap-1.5 overflow-x-auto pb-3 select-none">
-                {["All", "अनाज", "सब्ज़ी", "फल", "दलहन"].map((cat) => (
-                  <button
-                    key={cat}
-                    onClick={() => setMarketCategory(cat)}
-                    className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
-                      marketCategory === cat
-                        ? "bg-indigo-700 text-white"
-                        : "bg-white text-slate-700 border border-slate-100 shadow-xs"
-                    }`}
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </div>
+              {/* SUBTAB: Market Prices */}
+              {marketSubTab === "prices" && (
+                <>
+                  {/* Search input field */}
+                  <div className="relative mb-4">
+                    <Search className="absolute left-3 top-3.5 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      value={marketSearch}
+                      onChange={(e) => setMarketSearch(e.target.value)}
+                      placeholder="फसल का नाम खोजें (जैसे: प्याज, लहसुन, गेहूं)..."
+                      className="w-full bg-white border border-slate-100 rounded-2xl pl-10 pr-4 py-3 text-xs focus:ring-1 focus:ring-indigo-500 shadow-xs font-sans text-slate-900"
+                    />
+                  </div>
 
-              {/* Price card listing vertical cards */}
-              <div className="space-y-2.5 mt-1 flex-1">
-                {market?.prices
-                  .filter((crop) => {
-                    const matchCategory = marketCategory === "All" || crop.category === marketCategory;
-                    const matchText = crop.name.toLowerCase().includes(marketSearch.toLowerCase());
-                    return matchCategory && matchText;
-                  })
-                  .map((crop) => {
-                    const isOpen = expandedCropId === crop.id;
-                    return (
-                      <div 
-                        key={crop.id}
-                        className={`bg-white rounded-2xl border transition-all overflow-hidden ${
-                          isOpen ? "border-indigo-400 shadow-md" : "border-slate-50 shadow-xs hover:border-slate-200"
+                  {/* Crop category choice horizontal capsules */}
+                  <div className="flex gap-1.5 overflow-x-auto pb-3 select-none">
+                    {["All", "अनाज", "सब्ज़ी", "फल", "दलहन"].map((cat) => (
+                      <button
+                        key={cat}
+                        onClick={() => setMarketCategory(cat)}
+                        className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                          marketCategory === cat
+                            ? "bg-indigo-700 text-white"
+                            : "bg-white text-slate-700 border border-slate-100 shadow-xs"
                         }`}
                       >
-                        {/* Principal Summary row */}
-                        <div 
-                          onClick={() => setExpandedCropId(isOpen ? null : crop.id)}
-                          className="p-4 flex justify-between items-center cursor-pointer select-none"
-                        >
-                          <div className="flex items-center gap-3">
-                            <span className="text-3xl p-1 bg-slate-50 rounded-xl">{crop.emoji}</span>
-                            <div>
-                              <h4 className="font-extrabold text-sm text-slate-900 font-sans">{crop.name}</h4>
-                              <p className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1">
-                                <span>📍 {crop.mandi}</span>
-                                <span>•</span>
-                                <span>ताज़ा भाव</span>
-                              </p>
-                            </div>
-                          </div>
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
 
-                          <div className="text-right flex flex-col items-end">
-                            <span className="font-bold text-base text-indigo-950 font-sans">
-                              ₹{crop.price.toLocaleString("hi-IN")}/कुंतल
-                            </span>
-                            
-                            {/* Trend chip badge */}
-                            <span className={`inline-flex items-center gap-0.5 text-[11px] font-black mt-1 px-2 py-0.5 rounded-full ${
-                              crop.trend === 'up' 
-                                ? "bg-emerald-100 text-emerald-800" 
-                                : crop.trend === 'down' 
-                                  ? "bg-rose-100 text-rose-800"
-                                  : "bg-slate-100 text-slate-700"
-                            }`}>
-                              {crop.trend === 'up' && <ArrowUpRight className="w-3.5 h-3.5 text-emerald-800" />}
-                              {crop.trend === 'down' && <ArrowDownRight className="w-3.5 h-3.5 text-rose-800" />}
-                              <span>{crop.change !== 0 ? `${crop.change}%` : "स्थिर"}</span>
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Expandable Sparkline and prediction bottom row */}
-                        {isOpen && (
-                          <div className="px-4 pb-4 pt-1 bg-slate-50/50 border-t border-slate-100">
-                            {/* Custom SVG Sparkline line graph */}
-                            <div className="my-3">
-                              <p className="text-[10px] uppercase font-bold tracking-widest text-slate-400 mb-1">
-                                7-दिवसीय मूल्य उतार-चढ़ाव (7-Day Sparkline)
-                              </p>
-                              <div className="w-full bg-white border border-slate-100 rounded-xl p-3 h-24 flex items-center justify-center relative">
-                                {/* SVG render */}
-                                <svg viewBox="0 0 100 30" className="w-full h-full text-indigo-500 stroke-indigo-600 fill-none stroke-[2.5]">
-                                  <path d="M 0,25 Q 15,20 30,10 T 60,18 T 100,5" className="stroke-indigo-600" />
-                                  {/* fill overlay gradient */}
-                                  <path d="M 0,25 Q 15,20 30,10 T 60,18 T 100,5 L 100,30 L 0,30 Z" className="fill-indigo-100/30 stroke-none" />
-                                  <circle cx="100" cy="5" r="2.5" className="fill-indigo-700 stroke-white stroke-2" />
-                                </svg>
-                                
-                                <div className="absolute bottom-1 left-2 text-[8px] text-slate-400 font-mono">10 जून</div>
-                                <div className="absolute bottom-1 right-2 text-[8px] text-indigo-700 font-mono font-bold">17 जून (ताज़ा)</div>
-                              </div>
-                            </div>
-
-                            {/* prediction bullet sheet text summary block */}
-                            <div className="p-3 bg-indigo-50/70 border border-indigo-100 rounded-xl text-xs">
-                              <div className="flex items-center gap-1.5 text-indigo-950 font-bold mb-1.5">
-                                <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                                AI मूल्य भविष्यवाणी (15-Day Trend Analysis)
-                              </div>
-                              <p className="text-slate-700 leading-relaxed font-sans">{crop.prediction}</p>
-                            </div>
-
-                            <button 
-                              onClick={() => setTrendAnalysisCrop(crop)}
-                              className="mt-3 w-full bg-indigo-600 hover:bg-indigo-800 text-white font-bold text-xs py-2 px-3 rounded-lg flex items-center justify-center gap-1.5"
+                  {/* Price card listing vertical cards */}
+                  <div className="space-y-2.5 mt-1 flex-1">
+                    {market?.prices
+                      .filter((crop) => {
+                        const matchCategory = marketCategory === "All" || crop.category === marketCategory;
+                        const matchText = crop.name.toLowerCase().includes(marketSearch.toLowerCase());
+                        return matchCategory && matchText;
+                      })
+                      .map((crop) => {
+                        const isOpen = expandedCropId === crop.id;
+                        return (
+                          <div 
+                            key={crop.id}
+                            className={`bg-white rounded-2xl border transition-all overflow-hidden ${
+                              isOpen ? "border-indigo-400 shadow-md" : "border-slate-50 shadow-xs hover:border-slate-200"
+                            }`}
+                          >
+                            {/* Principal Summary row */}
+                            <div 
+                              onClick={() => setExpandedCropId(isOpen ? null : crop.id)}
+                              className="p-4 flex justify-between items-center cursor-pointer select-none"
                             >
-                              📊 सघन विश्लेषण देखें
-                            </button>
+                              <div className="flex items-center gap-3">
+                                <span className="text-3xl p-1 bg-slate-50 rounded-xl">{crop.emoji}</span>
+                                <div>
+                                  <h4 className="font-extrabold text-sm text-slate-900 font-sans">{crop.name}</h4>
+                                  <p className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1">
+                                    <span>📍 {crop.mandi}</span>
+                                    <span>•</span>
+                                    <span>ताज़ा भाव</span>
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="text-right flex flex-col items-end">
+                                <span className="font-bold text-base text-indigo-950 font-sans">
+                                  ₹{crop.price.toLocaleString("hi-IN")}/कुंतल
+                                </span>
+                                
+                                {/* Trend chip badge */}
+                                <span className={`inline-flex items-center gap-0.5 text-[11px] font-black mt-1 px-2 py-0.5 rounded-full ${
+                                  crop.trend === 'up' 
+                                    ? "bg-emerald-100 text-emerald-800" 
+                                    : crop.trend === 'down' 
+                                      ? "bg-rose-100 text-rose-800"
+                                      : "bg-slate-100 text-slate-700"
+                                }`}>
+                                  {crop.trend === 'up' && <ArrowUpRight className="w-3.5 h-3.5 text-emerald-800" />}
+                                  {crop.trend === 'down' && <ArrowDownRight className="w-3.5 h-3.5 text-rose-800" />}
+                                  <span>{crop.change !== 0 ? `${crop.change}%` : "स्थिर"}</span>
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Expandable Sparkline and prediction bottom row */}
+                            {isOpen && (
+                              <div className="px-4 pb-4 pt-1 bg-slate-50/50 border-t border-slate-100">
+                                <div className="my-3">
+                                  <p className="text-[10px] uppercase font-bold tracking-widest text-slate-400 mb-1">
+                                    7-दिवसीय मूल्य उतार-चढ़ाव (7-Day Sparkline)
+                                  </p>
+                                  <div className="w-full bg-white border border-slate-100 rounded-xl p-3 h-24 flex items-center justify-center relative">
+                                    <svg viewBox="0 0 100 30" className="w-full h-full text-indigo-500 stroke-indigo-600 fill-none stroke-[2.5]">
+                                      <path d="M 0,25 Q 15,20 30,10 T 60,18 T 100,5" className="stroke-indigo-600" />
+                                      <path d="M 0,25 Q 15,20 30,10 T 60,18 T 100,5 L 100,30 L 0,30 Z" className="fill-indigo-100/30 stroke-none" />
+                                      <circle cx="100" cy="5" r="2.5" className="fill-indigo-700 stroke-white stroke-2" />
+                                    </svg>
+                                    <div className="absolute bottom-1 left-2 text-[8px] text-slate-400 font-mono">10 जून</div>
+                                    <div className="absolute bottom-1 right-2 text-[8px] text-indigo-700 font-mono font-bold">17 जून (ताज़ा)</div>
+                                  </div>
+                                </div>
+
+                                <div className="p-3 bg-indigo-50/70 border border-indigo-100 rounded-xl text-xs">
+                                  <div className="flex items-center gap-1.5 text-indigo-950 font-bold mb-1.5">
+                                    <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                                    AI मूल्य भविष्यवाणी (15-Day Trend Analysis)
+                                  </div>
+                                  <p className="text-slate-700 leading-relaxed font-sans">{crop.prediction}</p>
+                                </div>
+                              </div>
+                            )}
                           </div>
-                        )}
+                        );
+                      })}
+                  </div>
+                </>
+              )}
+
+              {/* SUBTAB: Sell Your Produce */}
+              {marketSubTab === "sell" && (
+                <div className="space-y-4 flex-1">
+                  {/* Sell Form Card */}
+                  <div className="bg-white rounded-3xl p-5 border border-emerald-200 shadow-sm">
+                    <h3 className="font-bold text-sm text-emerald-900 mb-3 flex items-center gap-2">
+                      <span className="text-lg">🌾</span> अपनी फसल बेचें (Sell Your Produce)
+                    </h3>
+                    <p className="text-[11px] text-slate-500 mb-4">अपनी फसल की जानकारी भरें और सीधे खरीददारों से जुड़ें।</p>
+
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block mb-1">किसान का नाम *</label>
+                        <input
+                          type="text"
+                          value={sellForm.farmerName}
+                          onChange={(e) => setSellForm({ ...sellForm, farmerName: e.target.value })}
+                          placeholder="जैसे: रामेश्वर पाटिल"
+                          className="w-full bg-[#F8F5F0] border border-slate-200 rounded-xl px-3 py-2.5 text-xs focus:ring-1 focus:ring-emerald-500 font-sans text-slate-900"
+                        />
                       </div>
-                    );
-                  })}
-              </div>
+                      <div>
+                        <label className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block mb-1">फ़ोन नंबर *</label>
+                        <input
+                          type="tel"
+                          value={sellForm.phone}
+                          onChange={(e) => setSellForm({ ...sellForm, phone: e.target.value })}
+                          placeholder="जैसे: 9876543210"
+                          className="w-full bg-[#F8F5F0] border border-slate-200 rounded-xl px-3 py-2.5 text-xs focus:ring-1 focus:ring-emerald-500 font-sans text-slate-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block mb-1">फसल का नाम *</label>
+                        <input
+                          type="text"
+                          value={sellForm.cropName}
+                          onChange={(e) => setSellForm({ ...sellForm, cropName: e.target.value })}
+                          placeholder="जैसे: गेहूं, प्याज, टमाटर"
+                          className="w-full bg-[#F8F5F0] border border-slate-200 rounded-xl px-3 py-2.5 text-xs focus:ring-1 focus:ring-emerald-500 font-sans text-slate-900"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block mb-1">मात्रा (कुंतल) *</label>
+                          <input
+                            type="text"
+                            value={sellForm.quantity}
+                            onChange={(e) => setSellForm({ ...sellForm, quantity: e.target.value })}
+                            placeholder="जैसे: 10 कुंतल"
+                            className="w-full bg-[#F8F5F0] border border-slate-200 rounded-xl px-3 py-2.5 text-xs focus:ring-1 focus:ring-emerald-500 font-sans text-slate-900"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block mb-1">दाम प्रति कुंतल (₹) *</label>
+                          <input
+                            type="number"
+                            value={sellForm.pricePerQuintal}
+                            onChange={(e) => setSellForm({ ...sellForm, pricePerQuintal: e.target.value })}
+                            placeholder="जैसे: 2200"
+                            className="w-full bg-[#F8F5F0] border border-slate-200 rounded-xl px-3 py-2.5 text-xs focus:ring-1 focus:ring-emerald-500 font-sans text-slate-900"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block mb-1">अतिरिक्त जानकारी (Optional)</label>
+                        <input
+                          type="text"
+                          value={sellForm.description}
+                          onChange={(e) => setSellForm({ ...sellForm, description: e.target.value })}
+                          placeholder="जैसे: जैविक गेहूं, ताज़ा कटाई"
+                          className="w-full bg-[#F8F5F0] border border-slate-200 rounded-xl px-3 py-2.5 text-xs focus:ring-1 focus:ring-emerald-500 font-sans text-slate-900"
+                        />
+                      </div>
+                    </div>
+
+                    {sellFormMsg && (
+                      <div className={`mt-3 p-2.5 rounded-xl text-xs font-bold text-center ${
+                        sellFormMsg.includes("सफल") ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-rose-50 text-rose-800 border border-rose-200"
+                      }`}>
+                        {sellFormMsg}
+                      </div>
+                    )}
+
+                    <button
+                      onClick={handleCreateListing}
+                      className="mt-4 w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs py-3 rounded-xl shadow-sm transition-colors"
+                    >
+                      ✅ लिस्टिंग बनाएं (Create Listing)
+                    </button>
+                  </div>
+
+                  {/* Active Farmer Listings */}
+                  <div>
+                    <h3 className="text-xs text-slate-500 font-extrabold uppercase tracking-widest mb-2.5 flex items-center gap-1">
+                      🛒 {district} में बिक्री के लिए उपलब्ध (Available for Sale)
+                    </h3>
+                    {farmerListings.length === 0 ? (
+                      <div className="bg-white rounded-2xl p-6 border border-slate-100 text-center">
+                        <p className="text-sm text-slate-400">अभी कोई लिस्टिंग नहीं है।</p>
+                        <p className="text-[10px] text-slate-300 mt-1">पहली लिस्टिंग बनाकर शुरुआत करें!</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2.5">
+                        {farmerListings.map((listing) => (
+                          <div key={listing.id} className="bg-white rounded-2xl border border-slate-100 p-4 shadow-xs">
+                            <div className="flex justify-between items-start">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1.5">
+                                  <span className="bg-emerald-100 text-emerald-800 text-[9px] font-bold py-0.5 px-2 rounded">
+                                    {listing.cropName}
+                                  </span>
+                                  <span className="text-[9px] text-slate-400">📍 {listing.location}</span>
+                                </div>
+                                <h4 className="font-extrabold text-sm text-slate-900 font-sans">{listing.farmerName}</h4>
+                                <p className="text-[10px] text-slate-500 mt-0.5">📞 {listing.phone}</p>
+                                {listing.description && (
+                                  <p className="text-[10px] text-slate-400 mt-1 italic">{listing.description}</p>
+                                )}
+                              </div>
+                              <div className="text-right">
+                                <span className="font-bold text-base text-indigo-950 font-sans">
+                                  ₹{listing.pricePerQuintal.toLocaleString("hi-IN")}/कुंतल
+                                </span>
+                                <p className="text-[10px] text-slate-400 mt-0.5">📦 {listing.quantity}</p>
+                                <button
+                                  onClick={() => handleDeleteListing(listing.id)}
+                                  className="mt-2 text-[9px] text-rose-500 hover:text-rose-700 font-bold"
+                                >
+                                  ✕ हटाएँ
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

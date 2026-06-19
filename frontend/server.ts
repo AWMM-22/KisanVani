@@ -120,80 +120,75 @@ app.get("/api/weather-advisory", async (req, res) => {
   }
 });
 
-// 2. Live Market Prices Endpoint (Simulates high-fidelity Agmarknet feed)
-// // GET /api/market/prices — Agmarknet data.gov.in
-app.get("/api/market/prices", (req, res) => {
-  const { district = "Nashik" } = req.query;
-  
-  // Real crops in Indian Agriculture mandis
-  const crops = [
-    {
-      id: "onion",
-      emoji: "🧅",
-      name: "Onion — प्याज",
-      category: "सब्ज़ी",
-      price: 2340,
-      change: 12,
-      trend: "up",
-      sparkline: [2100, 2150, 2200, 2240, 2220, 2300, 2340],
-      mandi: `${district} Mandi`,
-      prediction: "अगले 15 दिनों में निर्यात मांग बढ़ने से प्याज के दाम ₹2,500/कुंतल तक छू सकते हैं। अनुकूल बिकवाली समय।"
-    },
-    {
-      id: "tomato",
-      emoji: "🍅",
-      name: "Tomato — टमाटर",
-      category: "सब्ज़ी",
-      price: 890,
-      change: -5,
-      trend: "down",
-      sparkline: [980, 950, 940, 910, 920, 900, 890],
-      mandi: `${district} Mandi`,
-      prediction: "स्थानीय आवक में बढ़ोतरी से कीमतों में मंदी है। आगामी सप्ताह भाव ₹850-₹900 पर स्थिर रहने की संभावना।"
-    },
-    {
-      id: "wheat",
-      emoji: "🌾",
-      name: "Wheat — गेहूं",
-      category: "अनाज",
-      price: 2150,
-      change: 0,
-      trend: "stable",
-      sparkline: [2150, 2150, 2160, 2150, 2150, 2150, 2150],
-      mandi: `${district} Mandi`,
-      prediction: "एमएसपी खरीद केंद्र पूर्ण सक्रिय हैं। भाव ₹2,150 पर ही स्थिर रहने की ठोस संभावना।"
-    },
-    {
-      id: "gram",
-      emoji: "🌱",
-      name: "Bengal Gram (Chana) — चना",
-      category: "दलहन",
-      price: 5410,
-      change: 3,
-      trend: "up",
-      sparkline: [5200, 5250, 5310, 5350, 5320, 5380, 5410],
-      mandi: `${district} Apex Mandi`,
-      prediction: "सरकारी खरीद लक्ष्य पूरा होने के समीप है। दलहनी दालों के दाम में मामूली बढ़ोतरी जारी रहने का रुख है।"
-    },
-    {
-      id: "pomegranate",
-      emoji: "🍎",
-      name: "Pomegranate — अनार",
-      category: "फल",
-      price: 8400,
-      change: 8,
-      trend: "up",
-      sparkline: [7800, 7900, 8100, 8150, 8200, 8350, 8400],
-      mandi: "Maharashtra Wholesale Bazaar",
-      prediction: "बाहरी राज्यों से मजबूत निर्यात ऑर्डरों के कारण अनार के दामों में लगातार तेजी बनी हुई है।"
+// 2. Live Market Prices Endpoint — proxy to FastAPI backend
+app.get("/api/market/prices", async (req, res) => {
+  try {
+    const { district = "Nashik" } = req.query;
+    const response = await fetch(`http://localhost:8000/api/market/prices?district=${district}`);
+    if (response.ok) {
+      const data = await response.json();
+      res.json(data);
+    } else {
+      throw new Error(`Backend returned ${response.status}`);
     }
-  ];
+  } catch (err: any) {
+    console.error("Failed to proxy market prices to backend:", err);
+    res.status(502).json({ error: "Market prices service unavailable" });
+  }
+});
 
-  res.json({
-    timestamp: new Date().toISOString(),
-    mandiLocation: district,
-    prices: crops
-  });
+// 2b. Farmer Listings — proxy to FastAPI backend
+app.get("/api/market/listings", async (req, res) => {
+  try {
+    const { district = "" } = req.query;
+    const response = await fetch(`http://localhost:8000/api/market/listings?district=${district}`);
+    if (response.ok) {
+      const data = await response.json();
+      res.json(data);
+    } else {
+      throw new Error(`Backend returned ${response.status}`);
+    }
+  } catch (err: any) {
+    console.error("Failed to fetch listings:", err);
+    res.json({ listings: [], total: 0 });
+  }
+});
+
+app.post("/api/market/listings", async (req, res) => {
+  try {
+    const response = await fetch("http://localhost:8000/api/market/listings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req.body)
+    });
+    if (response.ok) {
+      const data = await response.json();
+      res.json(data);
+    } else {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.detail || "Failed to create listing");
+    }
+  } catch (err: any) {
+    console.error("Failed to create listing:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/api/market/listings/:id", async (req, res) => {
+  try {
+    const response = await fetch(`http://localhost:8000/api/market/listings/${req.params.id}`, {
+      method: "DELETE"
+    });
+    if (response.ok) {
+      const data = await response.json();
+      res.json(data);
+    } else {
+      throw new Error(`Backend returned ${response.status}`);
+    }
+  } catch (err: any) {
+    console.error("Failed to delete listing:", err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // 3. Disease Identification API
