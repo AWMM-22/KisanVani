@@ -78,6 +78,86 @@ export default function App() {
   const [voiceStateMessage, setVoiceStateMessage] = useState<string>("");
   const [voiceResponseText, setVoiceResponseText] = useState<string>("");
   const [ttsActive, setTtsActive] = useState<boolean>(false);
+  const [isListening, setIsListening] = useState<boolean>(false);
+  const recognitionRef = useRef<any>(null);
+
+  // Sell form voice state
+  const [sellVoiceStep, setSellVoiceStep] = useState<number>(-1);
+  const [sellVoiceActive, setSellVoiceActive] = useState<boolean>(false);
+  const SELL_QUESTIONS = [
+    "आपका नाम क्या है?",
+    "आपका फ़ोन नंबर क्या है?",
+    "कौन सी फसल बेचना चाहते हैं?",
+    "कितनी मात्रा में है? कुंतल में बताएं।",
+    "प्रति कुंतल क्या दाम रखना चाहते हैं?",
+    "कोई और जानकारी देना चाहते हैं?"
+  ];
+  const SELL_FIELDS = ["farmerName", "phone", "cropName", "quantity", "pricePerQuintal", "description"];
+
+  // TTS helper - speaks text in Hindi
+  const speakText = (text: string) => {
+    if (!("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "hi-IN";
+    utterance.rate = 0.9;
+    utterance.pitch = 1;
+    utterance.onstart = () => setTtsActive(true);
+    utterance.onend = () => setTtsActive(false);
+    utterance.onerror = () => setTtsActive(false);
+    window.speechSynthesis.speak(utterance);
+  };
+
+  // STT helper - starts listening
+  const startListening = (onResult: (text: string) => void) => {
+    if (!("webkitSpeechRecognition" in window) && !("SpeechRecognition" in window)) {
+      setVoiceStateMessage("आपका ब्राउज़र स्पीच रिकग्निशन सपोर्ट नहीं करता। कृपया Chrome या Edge का उपयोग करें।");
+      return;
+    }
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    recognition.lang = voiceLanguage === "HI" ? "hi-IN" : voiceLanguage === "MR" ? "mr-IN" : "en-US";
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
+      setIsListening(true);
+      setVoiceStateMessage("🎤 सुन रहे हैं... बोलें (Listening...)");
+    };
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setIsListening(false);
+      onResult(transcript);
+    };
+
+    recognition.onerror = (event: any) => {
+      setIsListening(false);
+      console.error("Speech recognition error:", event.error);
+      if (event.error === "no-speech") {
+        setVoiceStateMessage("कोई आवाज़ नहीं सुनी गई। फिर से प्रयास करें।");
+      } else {
+        setVoiceStateMessage("आवाज़ पहचानने में त्रुटि। पुनः प्रयास करें।");
+      }
+    };
+
+    recognition.onend = () => setIsListening(false);
+    recognitionRef.current = recognition;
+    recognition.start();
+  };
+
+  // Stop listening
+  const stopListening = () => {
+    recognitionRef.current?.stop();
+    setIsListening(false);
+  };
+
+  // Stop TTS
+  const stopTts = () => {
+    window.speechSynthesis.cancel();
+    setTtsActive(false);
+  };
 
   // List of preconfigured interactive natural farming ZBNF lessons
   const lessonsDatabase: EducationLesson[] = [
@@ -237,6 +317,48 @@ export default function App() {
     }
   };
 
+  // Voice-guided sell form
+  const startSellVoice = () => {
+    setSellVoiceStep(0);
+    setSellVoiceActive(true);
+    setSellFormMsg("");
+    speakText(SELL_QUESTIONS[0]);
+    setTimeout(() => {
+      startListening((text) => handleSellVoiceAnswer(0, text));
+    }, 1500);
+  };
+
+  const handleSellVoiceAnswer = (step: number, answer: string) => {
+    const field = SELL_FIELDS[step];
+    let processedAnswer = answer;
+
+    // Clean up the answer
+    if (field === "pricePerQuintal") {
+      const nums = answer.match(/\d+/);
+      processedAnswer = nums ? nums[0] : answer;
+    }
+    if (field === "phone") {
+      const nums = answer.replace(/\s/g, "").match(/\d{10}/);
+      processedAnswer = nums ? nums[0] : answer.replace(/\s/g, "");
+    }
+
+    setSellForm(prev => ({ ...prev, [field]: processedAnswer }));
+
+    const nextStep = step + 1;
+    if (nextStep < SELL_QUESTIONS.length) {
+      setSellVoiceStep(nextStep);
+      speakText(SELL_QUESTIONS[nextStep]);
+      setTimeout(() => {
+        startListening((text) => handleSellVoiceAnswer(nextStep, text));
+      }, 1500);
+    } else {
+      setSellVoiceStep(-1);
+      setSellVoiceActive(false);
+      speakText("सभी जानकारी भर दी गई है। अब लिस्टिंग बनाने के लिए बटन दबाएं।");
+      setSellFormMsg("आवाज़ से सभी फील्ड भर दिए गए हैं!");
+    }
+  };
+
   // disease predictive scan action
   const handleDiseasePrediction = async (imageType: "tomato" | "potato" | "uploaded", customImageSrc?: string) => {
     setDiseaseLoading(true);
@@ -286,10 +408,25 @@ export default function App() {
 
   // Triggering the Voice Chat Consult Dialog
   const handleVoiceQuery = async (presetText?: string) => {
-    const textToSend = presetText || voiceQuery || "जीवामृत बनाने की विधि क्या है?";
-    setVoiceQuery(textToSend);
+    if (presetText) {
+      // Preset clicked - send directly
+      await sendVoiceQuery(presetText);
+    } else {
+      // Start listening for user's voice
+      setVoiceQuery("");
+      setVoiceResponseText("");
+      setIsVoiceActive(true);
+      startListening(async (transcript) => {
+        setVoiceQuery(transcript);
+        await sendVoiceQuery(transcript);
+      });
+    }
+  };
+
+  const sendVoiceQuery = async (text: string) => {
+    setVoiceQuery(text);
     setIsVoiceActive(true);
-    setVoiceStateMessage("वाणी पहचान हो रही है... (STT Whisper active)");
+    setVoiceStateMessage("AI जवाब तैयार हो रहा है... (Processing)");
     setVoiceResponseText("");
 
     try {
@@ -297,22 +434,23 @@ export default function App() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          question: textToSend,
+          question: text,
           language: voiceLanguage
         })
       });
 
       if (response.ok) {
         const result = await response.json();
-        setVoiceStateMessage("AI परामर्शदाता बोल रहा है... (TTS active)");
+        setVoiceStateMessage("🔊 AI बोल रहा है... (Speaking)");
         setVoiceResponseText(result.answer);
-        // Simulate reading response aloud
-        setTtsActive(true);
+        speakText(result.answer);
       }
     } catch (err) {
       console.error(err);
-      setVoiceStateMessage("समस्या आई, त्रुटि विवरण लोड हो रहा है");
-      setVoiceResponseText("माफ कीजिये, सर्वर से जुड़ने में गड़बड़ हुई। कृपया इंटरनेट कनेक्शन की जांच करें।");
+      setVoiceStateMessage("त्रुटि हुई।");
+      const errorMsg = "माफ कीजिये, सर्वर से जुड़ने में गड़बड़ हुई। कृपया इंटरनेट कनेक्शन की जांच करें।";
+      setVoiceResponseText(errorMsg);
+      speakText(errorMsg);
     }
   };
 
@@ -847,7 +985,33 @@ export default function App() {
                     <h3 className="font-bold text-sm text-emerald-900 mb-3 flex items-center gap-2">
                       <span className="text-lg">🌾</span> अपनी फसल बेचें (Sell Your Produce)
                     </h3>
-                    <p className="text-[11px] text-slate-500 mb-4">अपनी फसल की जानकारी भरें और सीधे खरीददारों से जुड़ें।</p>
+                    <p className="text-[11px] text-slate-500 mb-3">अपनी फसल की जानकारी भरें और सीधे खरीददारों से जुड़ें।</p>
+
+                    {/* Voice Input Button */}
+                    <button
+                      onClick={sellVoiceActive ? () => { setSellVoiceActive(false); setSellVoiceStep(-1); stopListening(); stopTts(); } : startSellVoice}
+                      className={`w-full mb-4 py-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
+                        sellVoiceActive 
+                          ? "bg-red-500 text-white animate-pulse" 
+                          : "bg-gradient-to-r from-emerald-600 to-emerald-700 text-white hover:from-emerald-700 hover:to-emerald-800"
+                      }`}
+                    >
+                      <Mic className="w-4 h-4" />
+                      {sellVoiceActive 
+                        ? `🎤 प्रश्न ${sellVoiceStep + 1}/${SELL_QUESTIONS.length} — बोलें... (रोकें)` 
+                        : "🎤 आवाज़ से भरें (Voice Fill Form)"}
+                    </button>
+
+                    {sellVoiceActive && (
+                      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 mb-4 text-center">
+                        <p className="text-[11px] text-emerald-800 font-bold">
+                          {SELL_QUESTIONS[sellVoiceStep]}
+                        </p>
+                        <p className="text-[9px] text-emerald-600 mt-1">
+                          {isListening ? "🎤 सुन रहे हैं... बोलें" : "⏳ जवाब प्रोसेस हो रहा है..."}
+                        </p>
+                      </div>
+                    )}
 
                     <div className="space-y-3">
                       <div>
@@ -1330,7 +1494,8 @@ export default function App() {
                 <div 
                   onClick={() => {
                     setIsVoiceActive(false);
-                    setTtsActive(false);
+                    stopTts();
+                    stopListening();
                   }}
                   className="w-16 h-1.5 bg-emerald-900 rounded-full mx-auto mb-4 cursor-pointer hover:bg-emerald-800"
                 />
@@ -1402,15 +1567,18 @@ export default function App() {
                     <div className="mt-4 flex gap-2 justify-end">
                       <button 
                         onClick={() => {
-                          // Toggle simulated audio playback
-                          setTtsActive(!ttsActive);
+                          if (ttsActive) {
+                            stopTts();
+                          } else {
+                            speakText(voiceResponseText);
+                          }
                         }}
                         className={`text-slate-900 text-xs py-1.5 px-3 rounded-lg font-bold flex items-center gap-1 ${
                           ttsActive ? "bg-amber-400 animate-pulse" : "bg-emerald-300"
                         }`}
                       >
                         <Volume2 className="w-3.5 h-3.5" />
-                        {ttsActive ? "🔊 आवाज़ बंद करें" : "🔈 आवाज़ सुनें (TTS)"}
+                        {ttsActive ? "🔊 बंद करें" : "🔈 सुनें (TTS)"}
                       </button>
                     </div>
                   </div>
@@ -1440,16 +1608,39 @@ export default function App() {
                   </div>
                 )}
 
-                {/* Dismiss button */}
-                <button 
-                  onClick={() => {
-                    setIsVoiceActive(false);
-                    setTtsActive(false);
-                  }}
-                  className="mt-5 w-full bg-black/40 hover:bg-black/60 border border-emerald-900 font-bold text-xs py-2.5 px-4 rounded-xl text-white uppercase tracking-wider"
-                >
-                  ✕ संवाद बंद करें (Dismiss)
-                </button>
+                {/* Big Microphone Button */}
+                <div className="flex items-center gap-3 mt-4">
+                  {isListening ? (
+                    <button 
+                      onClick={stopListening}
+                      className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold text-xs py-3.5 rounded-xl flex items-center justify-center gap-2 animate-pulse"
+                    >
+                      <Mic className="w-5 h-5" />
+                      🎤 सुन रहे हैं... रोकने के लिए दबाएं
+                    </button>
+                  ) : (
+                    <button 
+                      onClick={() => {
+                        setVoiceResponseText("");
+                        handleVoiceQuery();
+                      }}
+                      className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-3.5 rounded-xl flex items-center justify-center gap-2"
+                    >
+                      <Mic className="w-5 h-5" />
+                      🎤 बोलें (Speak)
+                    </button>
+                  )}
+                  <button 
+                    onClick={() => {
+                      setIsVoiceActive(false);
+                      stopTts();
+                      stopListening();
+                    }}
+                    className="bg-black/40 hover:bg-black/60 border border-emerald-900 font-bold text-xs py-3.5 px-4 rounded-xl text-white"
+                  >
+                    ✕
+                  </button>
+                </div>
               </motion.div>
             </motion.div>
           )}
