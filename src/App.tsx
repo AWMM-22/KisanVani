@@ -42,6 +42,7 @@ export default function App() {
   const [symptomsInput, setSymptomsInput] = useState<string>("");
   const [diseaseLoading, setDiseaseLoading] = useState<boolean>(false);
   const [diseaseResult, setDiseaseResult] = useState<DiseaseResult | null>(null);
+  const [diseaseError, setDiseaseError] = useState<string | null>(null);
   const [scannedLineY, setScannedLineY] = useState<number>(0);
 
   // Market screen state
@@ -183,6 +184,7 @@ export default function App() {
   const handleDiseasePrediction = async (imageType: "tomato" | "potato" | "uploaded", customImageSrc?: string) => {
     setDiseaseLoading(true);
     setDiseaseResult(null);
+    setDiseaseError(null);
 
     let base64Img = "";
     if (imageType === "tomato") {
@@ -215,24 +217,13 @@ export default function App() {
           setDiseaseLoading(false);
         }, 1800);
       } else {
-        throw new Error("Analysis failed");
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || errData.error || "Analysis failed");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
       setDiseaseLoading(false);
-      // Hardcoded fallback UI details
-      setDiseaseResult({
-        disease: "Early Blight (अगेती झुलसा)",
-        pestsDetected: "नगण्य मात्रा",
-        confidence: "82% सटीकता",
-        crop: "टमाटर (Tomato)",
-        analysisText: "खेत स्तर पर विश्लेषण के अनुसार अधिक उमस व नमी से पत्ती झुलसा का रोग लगा है।",
-        remedies: [
-          { name: "नीम ऑयल छिड़काव", instruction: "15 ली. पानी में 50 मिली नीम तेल डालें" },
-          { name: "जीवामृत उपयोग", instruction: "जड़ के पास जीवामृत तरल खाद डालें।" },
-          { name: "ट्राइकोडर्मा", instruction: "100 ग्राम जैविक पाउडर खाद में मिलाएं।" }
-        ]
-      });
+      setDiseaseError(err.message || "रोग पहचान सेवा वर्तमान में अनुपलब्ध है। (Prediction service is unavailable)");
     }
   };
 
@@ -517,6 +508,17 @@ export default function App() {
                   <div className="flex-1">
                     <p className="text-xs font-bold text-emerald-300">AI विश्लेषण हो रहा है...</p>
                     <p className="text-[10px] text-slate-400 font-mono">HuggingFace EfficientNet + Gemini Pathology model</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Disease analysis error message display */}
+              {diseaseError && (
+                <div className="bg-rose-50 text-rose-950 p-4 rounded-2xl border border-rose-200 text-xs my-2 font-medium flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold">विश्लेषण त्रुटि (Analysis Error)</p>
+                    <p className="mt-0.5 opacity-90">{diseaseError}</p>
                   </div>
                 </div>
               )}

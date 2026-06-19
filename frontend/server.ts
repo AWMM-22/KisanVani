@@ -200,79 +200,25 @@ app.get("/api/market/prices", (req, res) => {
 // // POST /api/disease/predict — HuggingFace EfficientNet
 // We back this endpoint with actual Gemini AI vision requests for genuine diagnostic capabilities!
 app.post("/api/disease/predict", async (req, res) => {
-  const { image, symptoms, cropName } = req.body;
-  const client = getGeminiClient();
-
-  if (!client) {
-    // Elegant hardcoded simulations if Gemini key is missing
-    return res.json({
-      disease: symptoms?.toLowerCase().includes("leaf spot") 
-        ? "Early Blight (अगेती झुलसा)" 
-        : "Powdery Mildew (चूर्णिल आसिता)",
-      pestsDetected: "Spider Mites / लाल मकड़ी (नगण्य मात्रा)",
-      confidence: "87% सटीकता (Simulated)",
-      crop: cropName || "टमाटर (Tomato)",
-      analysisText: "पत्तियों के धब्बों और पीले छल्लों के आधार पर यह संक्रमण अगेती झुलसा प्रतीत होता है। अत्यधिक आर्द्रता से फैला है।",
-      remedies: [
-        { name: "नीम तेल स्प्रे (Neem Oil Spray)", instruction: "15 लीटर पानी में 50 मिलीलीटर नीम तेल और तरल साबुन मिलाकर पत्तों के नीचे व ऊपर छिड़कें।" },
-        { name: "जीवामृत अनुप्रयोग (Jeevamrutha Enrichment)", instruction: "पौधे के चारों ओर जड़ क्षेत्र में मिट्टी पर 10% सघन जीवामृत घोल डालें ताकि सुरक्षा रोगाणु पनपें।" },
-        { name: "ट्राइकोडर्मा जैविक उपचार (Trichoderma)", instruction: "100 ग्राम ट्राइकोडर्मा पाउडर को 10 किलो सड़ी गोबर खाद में मिलाकर संक्रमित क्यारियों की मिट्टी में मिलाएं।" }
-      ],
-      belowLimit: false
-    });
-  }
-
   try {
-    let promptText = `
-      You are an expert plant pathologist specialized in Indian Agriculture and Natural Farming / Zero Budget Natural Farming (ZBNF).
-      A farmer is submitting diagnostic data.
-      ${cropName ? `Crop: ${cropName}.` : ""}
-      ${symptoms ? `Syptoms described by farmer: "${symptoms}".` : ""}
-      
-      Look closely at the image or text description and respond with a structured JSON format containing:
-      1. disease: Disease name in English and translated Hindi (e.g. "Early Blight - अगेती झुलसा")
-      2. confidence: An estimated accuracy statistic (e.g. "89% सटीकता")
-      3. analysisText: Brief diagnosis background details in simple Hindi.
-      4. remedies: List of exactly 3 natural, organic, or ZBNF treatments. Every remedy must specify natural preparation (e.g., Neem oil, Jeevamrutha, Agniastra, Dashaparni ark, Trichoderma) and exact application directions.
-      
-      Respond MUST be strictly valid JSON according to this structure with nothing else. No markdown wrappers unless required, just raw JSON.
-    `;
-
-    let parts: any[] = [{ text: promptText }];
-    if (image) {
-      const mimeType = image.split(";")[0].split(":")[1] || "image/jpeg";
-      const base64Data = image.split(",")[1] || image;
-      parts.push({
-        inlineData: {
-          mimeType,
-          data: base64Data
-        }
-      });
-    }
-
-    const response = await client.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: { parts: parts },
-      config: {
-        responseMimeType: "application/json"
-      }
+    const response = await fetch("http://localhost:8000/api/disease/predict", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req.body)
     });
-
-    let cleanJson = response.text || "";
-    cleanJson = cleanJson.trim();
-    if (cleanJson.startsWith("```json")) {
-      cleanJson = cleanJson.slice(7).trim();
+    
+    if (response.ok) {
+      const data = await response.json();
+      res.json(data);
+    } else {
+      throw new Error(`Backend returned ${response.status}: ${await response.text()}`);
     }
-    if (cleanJson.endsWith("```")) {
-      cleanJson = cleanJson.slice(0, -3).trim();
-    }
-
-    const parsedResult = JSON.parse(cleanJson);
-    res.json(parsedResult);
-
   } catch (err: any) {
-    console.error("Gemini Disease analysis failed:", err);
-    res.status(500).json({ error: "रोग का विश्लेषण नहीं हो सका। कृपया पुनः प्रयास करें।", detail: err.message });
+    console.error("Failed to proxy disease analysis to FastAPI backend:", err);
+    // Offline / Backend unavailable fallback
+    res.status(502).json({ 
+      error: "Disease prediction service is currently offline or unavailable. " + err.message 
+    });
   }
 });
 
