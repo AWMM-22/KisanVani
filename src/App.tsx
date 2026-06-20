@@ -14,6 +14,8 @@ import {
 import SplashScreen from "./components/SplashScreen";
 import HomeScreen from "./components/HomeScreen";
 
+const API_BASE = import.meta.env.VITE_API_URL || "";
+
 // Simulated base64 images for quick user diagnostic presets (healthy vs diseased)
 const DEMO_DISEASED_TOMATO = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' width='100%' height='100%'><rect width='100' height='100' fill='%23661100'/><circle cx='50' cy='50' r='30' fill='%23e63946'/><ellipse cx='35' cy='35' r='8' fill='%23450505'/><ellipse cx='60' cy='65' r='10' fill='%23250202'/><path d='M30 45 Q 50 20 70 45' stroke='%23445522' stroke-width='4' fill='none'/></svg>";
 const DEMO_POTATO_LEAF = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' width='100%' height='100%'><rect width='100' height='100' fill='%23224422'/><path d='M50 15 Q30 50 50 85 Q70 50 50 15 Z' fill='%234d7c0f'/><line x1='50' y1='15' x2='50' y2='85' stroke='%233f6212' stroke-width='3'/><circle cx='42' cy='45' r='5' fill='%2327270a'/><circle cx='58' cy='55' r='7' fill='%231f1f0a'/></svg>";
@@ -236,7 +238,7 @@ export default function App() {
 
   const fetchWeatherData = async () => {
     try {
-      const response = await fetch(`/api/weather-advisory?district=${district}`);
+      const response = await fetch(`${API_BASE}/api/weather-advisory?district=${district}`);
       if (response.ok) {
         const data = await response.json();
         setWeather(data);
@@ -248,7 +250,7 @@ export default function App() {
 
   const fetchMarketPrices = async () => {
     try {
-      const response = await fetch(`/api/market/prices?district=${district}`);
+      const response = await fetch(`${API_BASE}/api/market/prices?district=${district}`);
       if (response.ok) {
         const data = await response.json();
         setMarket(data);
@@ -260,7 +262,7 @@ export default function App() {
 
   const fetchSubsidies = async () => {
     try {
-      const response = await fetch("/api/finance/subsidies");
+      const response = await fetch(`${API_BASE}/api/finance/subsidies`);
       if (response.ok) {
         const data = await response.json();
         setSubsidies(data);
@@ -272,7 +274,7 @@ export default function App() {
 
   const fetchFarmerListings = async () => {
     try {
-      const response = await fetch(`/api/market/listings?district=${district}`);
+      const response = await fetch(`${API_BASE}/api/market/listings?district=${district}`);
       if (response.ok) {
         const data = await response.json();
         setFarmerListings(data.listings || []);
@@ -288,7 +290,7 @@ export default function App() {
       return;
     }
     try {
-      const response = await fetch("/api/market/listings", {
+      const response = await fetch(`${API_BASE}/api/market/listings`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -310,7 +312,7 @@ export default function App() {
 
   const handleDeleteListing = async (id: string) => {
     try {
-      await fetch(`/api/market/listings/${id}`, { method: "DELETE" });
+      await fetch(`${API_BASE}/api/market/listings/${id}`, { method: "DELETE" });
       fetchFarmerListings();
     } catch (e) {
       console.error("Error deleting listing:", e);
@@ -378,7 +380,7 @@ export default function App() {
     }
 
     try {
-      const response = await fetch("/api/disease/predict", {
+      const response = await fetch(`${API_BASE}/api/disease/predict`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -430,7 +432,7 @@ export default function App() {
     setVoiceResponseText("");
 
     try {
-      const response = await fetch("/api/voice-consult", {
+      const response = await fetch(`${API_BASE}/api/voice-consult`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
