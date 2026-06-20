@@ -32,7 +32,7 @@ KisanVani is a **voice-first, AI-powered agricultural advisory platform** built 
 
 ### 🌿 Crop Disease Identification
 - Upload image via **camera** or **gallery**, or use built-in demo presets
-- AI-powered analysis using **Gemini Vision** and **Groq Vision** models
+- AI-powered analysis using **Hugging Face Models** with fallback options **Gemini Vision** and **Groq Vision** models
 - Returns: disease name, confidence %, severity level, organic remedies, precautions, prevention tips
 - Animated green laser scanner during analysis
 
