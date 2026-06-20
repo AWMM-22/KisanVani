@@ -7,7 +7,8 @@ import { GoogleGenAI } from "@google/genai";
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
+const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
 
 // Parse JSON payloads up to 10mb for image uploads
 app.use(express.json({ limit: "10mb" }));
@@ -124,7 +125,7 @@ app.get("/api/weather-advisory", async (req, res) => {
 app.get("/api/market/prices", async (req, res) => {
   try {
     const { district = "Nashik" } = req.query;
-    const response = await fetch(`http://localhost:8000/api/market/prices?district=${district}`);
+    const response = await fetch(`${BACKEND_URL}/api/market/prices?district=${district}`);
     if (response.ok) {
       const data = await response.json();
       res.json(data);
@@ -141,7 +142,7 @@ app.get("/api/market/prices", async (req, res) => {
 app.get("/api/market/listings", async (req, res) => {
   try {
     const { district = "" } = req.query;
-    const response = await fetch(`http://localhost:8000/api/market/listings?district=${district}`);
+    const response = await fetch(`${BACKEND_URL}/api/market/listings?district=${district}`);
     if (response.ok) {
       const data = await response.json();
       res.json(data);
@@ -156,7 +157,7 @@ app.get("/api/market/listings", async (req, res) => {
 
 app.post("/api/market/listings", async (req, res) => {
   try {
-    const response = await fetch("http://localhost:8000/api/market/listings", {
+    const response = await fetch(`${BACKEND_URL}/api/market/listings`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(req.body)
@@ -176,7 +177,7 @@ app.post("/api/market/listings", async (req, res) => {
 
 app.delete("/api/market/listings/:id", async (req, res) => {
   try {
-    const response = await fetch(`http://localhost:8000/api/market/listings/${req.params.id}`, {
+    const response = await fetch(`${BACKEND_URL}/api/market/listings/${req.params.id}`, {
       method: "DELETE"
     });
     if (response.ok) {
@@ -196,7 +197,7 @@ app.delete("/api/market/listings/:id", async (req, res) => {
 // We back this endpoint with actual Gemini AI vision requests for genuine diagnostic capabilities!
 app.post("/api/disease/predict", async (req, res) => {
   try {
-    const response = await fetch("http://localhost:8000/api/disease/predict", {
+    const response = await fetch(`${BACKEND_URL}/api/disease/predict`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(req.body)
