@@ -93,7 +93,7 @@ export default function SplashScreen({ onComplete }: SplashScreenProps) {
         >
           <img
             id="farmer-hero-image"
-            src="/src/assets/images/farmer_sunrise_gold_1781698766693.jpg"
+            src="/images/farmer_sunrise_gold_1781698766693.jpg"
             referrerPolicy="no-referrer"
             className="w-full h-full object-cover"
           />
