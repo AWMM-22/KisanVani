@@ -36,7 +36,7 @@ export default function HomeScreen({
   };
 
   return (
-    <div id="home-screen-view" className="flex-1 flex flex-col pb-24 select-none">
+    <div id="home-screen-view" className="flex-1 flex flex-col pb-4 select-none">
       
       {/* 1. Gradient Header Section */}
       <div 

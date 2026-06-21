@@ -540,7 +540,7 @@ export default function App() {
         {/* Screen Dynamic content body scroll container */}
         <div 
           id="screen-content-area"
-          className={`flex-1 overflow-y-auto scrollbar-hide flex flex-col pb-28 ${isHighContrast ? "bg-white font-extrabold text-black" : "bg-[#F8F5F0]"}`}
+          className={`flex-1 overflow-y-auto scrollbar-hide flex flex-col pb-2 ${isHighContrast ? "bg-white font-extrabold text-black" : "bg-[#F8F5F0]"}`}
         >
           {activeTab === "home" && (
             <HomeScreen
@@ -1810,7 +1810,7 @@ export default function App() {
         </AnimatePresence>
 
         {/* 5. Mobile Device Bottom Tab Bar Navigation element with circular border & floating style */}
-        <div id="floating-footer-navbar" className="absolute bottom-4 left-4 right-4 z-20">
+        <div id="floating-footer-navbar" className="shrink-0 px-4 pb-4 pt-1 z-20">
           <nav className="bg-white/95 backdrop-blur-md border border-slate-200/90 h-[68px] rounded-full px-4 flex justify-between items-center shadow-[0_12px_32px_rgba(0,0,0,0.15)] relative">
             
             {/* Tab 1: Home */}
